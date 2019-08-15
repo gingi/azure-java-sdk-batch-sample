@@ -4,12 +4,12 @@ languages:
 - java
 products:
 - azure
-services: Batch
-platforms: java
-author: yaohaizh
+extensions:
+- services: Batch
+- platforms: java
 ---
 
-## Getting Started with Batch - Manage Batch Account - in Java ##
+# Getting Started with Batch - Manage Batch Account - in Java #
 
 
   Azure Batch sample for managing batch accounts -
