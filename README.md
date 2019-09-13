@@ -4,9 +4,8 @@ languages:
 - java
 products:
 - azure
-extensions:
-- services: Batch
-- platforms: java
+description: "Azure Batch sample for managing batch accounts. Get subscription batch account quota for a particular location."
+urlFragment: batch-java-manage-batch-accounts
 ---
 
 # Getting Started with Batch - Manage Batch Account - in Java #
