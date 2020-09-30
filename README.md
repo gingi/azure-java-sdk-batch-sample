@@ -5,8 +5,8 @@ languages:
 products:
 - azure
 extensions:
-- services: Batch
-- platforms: java
+  services: Batch
+  platforms: java
 ---
 
 # Getting Started with Batch - Manage Batch Account - in Java #
