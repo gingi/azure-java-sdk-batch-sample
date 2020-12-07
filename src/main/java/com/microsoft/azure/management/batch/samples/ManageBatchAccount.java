@@ -6,21 +6,36 @@
 
 package com.microsoft.azure.management.batch.samples;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+
+import com.microsoft.azure.Page;
+import com.microsoft.azure.PagedList;
+import com.microsoft.azure.batch.BatchClient;
+import com.microsoft.azure.batch.DetailLevel;
+import com.microsoft.azure.batch.auth.BatchSharedKeyCredentials;
+import com.microsoft.azure.batch.protocol.implementation.TasksImpl;
+import com.microsoft.azure.batch.protocol.models.AllocationState;
+import com.microsoft.azure.batch.protocol.models.CloudJob;
+import com.microsoft.azure.batch.protocol.models.CloudPool;
+import com.microsoft.azure.batch.protocol.models.CloudTask;
+import com.microsoft.azure.batch.protocol.models.ImageReference;
+import com.microsoft.azure.batch.protocol.models.PoolAddParameter;
+import com.microsoft.azure.batch.protocol.models.PoolInformation;
+import com.microsoft.azure.batch.protocol.models.TaskAddParameter;
+import com.microsoft.azure.batch.protocol.models.TaskListHeaders;
+import com.microsoft.azure.batch.protocol.models.TaskState;
+import com.microsoft.azure.batch.protocol.models.VirtualMachineConfiguration;
 import com.microsoft.azure.management.Azure;
-import com.microsoft.azure.management.batch.AccountKeyType;
-import com.microsoft.azure.management.batch.Application;
-import com.microsoft.azure.management.batch.ApplicationPackage;
 import com.microsoft.azure.management.batch.BatchAccount;
-import com.microsoft.azure.management.batch.BatchAccountKeys;
 import com.microsoft.azure.management.resources.fluentcore.arm.Region;
 import com.microsoft.azure.management.samples.Utils;
-import com.microsoft.azure.management.storage.StorageAccount;
-import com.microsoft.azure.management.storage.StorageAccountKey;
 import com.microsoft.rest.LogLevel;
-
-import java.io.File;
-import java.util.List;
-import java.util.Map;
+import com.microsoft.rest.ServiceResponseWithHeaders;
 
 /**
  * Azure Batch sample for managing batch accounts -
@@ -39,6 +54,8 @@ import java.util.Map;
  */
 
 public final class ManageBatchAccount {
+    static final long POOL_STEADY_TIMEOUT_IN_SECONDS = 300;
+    static final long NUM_TASKS = 1500;
 
     /**
      * Main function which runs the actual sample.
@@ -51,10 +68,10 @@ public final class ManageBatchAccount {
         final String applicationName = "application";
         final String applicationDisplayName = "My application display name";
         final String applicationPackageName = "app_package";
-        final String batchAccountName2 = Utils.createRandomName("ba2");
-        final String rgName = Utils.createRandomName("rgBAMB");
-        final Region region = Region.AUSTRALIA_SOUTHEAST;
-        final Region region2 = Region.US_WEST;
+        final String rgName = Utils.createRandomName("testPagedList");
+        final Region region = Region.US_EAST;
+        final String poolId = Utils.createRandomName("shpasterPool");
+        final String jobId = Utils.createRandomName("shpasterJob");
 
         try {
 
@@ -103,39 +120,6 @@ public final class ManageBatchAccount {
             Utils.print(batchAccount);
 
             // ============================================================
-            // Get | regenerate batch account access keys
-
-            System.out.println("Getting batch account access keys");
-
-            BatchAccountKeys batchAccountKeys = batchAccount.getKeys();
-
-            Utils.print(batchAccountKeys);
-
-            System.out.println("Regenerating primary batch account primary access key");
-
-            batchAccountKeys = batchAccount.regenerateKeys(AccountKeyType.PRIMARY);
-
-            Utils.print(batchAccountKeys);
-
-            // ============================================================
-            // Regenerate the keys for storage account
-            StorageAccount storageAccount = azure.storageAccounts().getByResourceGroup(rgName, storageAccountName);
-            List<StorageAccountKey> storageAccountKeys = storageAccount.getKeys();
-
-            Utils.print(storageAccountKeys);
-
-            System.out.println("Regenerating first storage account access key");
-
-            storageAccountKeys = storageAccount.regenerateKey(storageAccountKeys.get(0).keyName());
-
-            Utils.print(storageAccountKeys);
-
-            // ============================================================
-            // Synchronize storage account keys with batch account
-
-            batchAccount.synchronizeAutoStorageKeys();
-
-            // ============================================================
             // Update name of application.
             batchAccount
                     .update()
@@ -146,36 +130,6 @@ public final class ManageBatchAccount {
 
             batchAccount.refresh();
             Utils.print(batchAccount);
-
-            // ============================================================
-            // Create another batch account
-
-            System.out.println("Creating another Batch Account");
-
-            allowedNumberOfBatchAccounts = azure.batchAccounts().getBatchAccountQuotaByLocation(region2);
-
-            // ===========================================================
-            // List all the batch accounts in subscription.
-
-            batchAccounts = azure.batchAccounts().list();
-            batchAccountsAtSpecificRegion = 0;
-            for (BatchAccount batch: batchAccounts) {
-                if (batch.region() == region2) {
-                    batchAccountsAtSpecificRegion++;
-                }
-            }
-
-            BatchAccount batchAccount2 = null;
-            if (batchAccountsAtSpecificRegion < allowedNumberOfBatchAccounts) {
-                batchAccount2 = azure.batchAccounts().define(batchAccountName2)
-                        .withRegion(region2)
-                        .withExistingResourceGroup(rgName)
-                        .withExistingStorageAccount(storageAccount)
-                        .create();
-
-                System.out.println("Created second Batch Account:");
-                Utils.print(batchAccount2);
-            }
 
             // ============================================================
             // List batch accounts
@@ -194,28 +148,74 @@ public final class ManageBatchAccount {
             batchAccount.refresh();
             Utils.print(batchAccount);
 
-            // ============================================================
-            // Delete a batch account
+            BatchClient client = getBatchClient(batchAccount);
+            System.out.println("Created client with " + batchAccount.accountEndpoint());
 
-            System.out.println("Deleting a batch account - " + batchAccount.name());
+            // CREATE JOB
 
-            for (Map.Entry<String, Application> applicationEntry: batchAccount.applications().entrySet()) {
-                for (Map.Entry<String, ApplicationPackage> applicationPackageEntry: applicationEntry.getValue().applicationPackages().entrySet()) {
-                    System.out.println("Deleting a application package - " + applicationPackageEntry.getKey());
-                    applicationPackageEntry.getValue().delete();
-                }
-                System.out.println("Deleting a application - " + applicationEntry.getKey());
-                batchAccount.update().withoutApplication(applicationEntry.getKey()).apply();
+            System.out.println("Creating pool " + poolId);
+            PoolInformation poolInfo = new PoolInformation().withPoolId(poolId);
+
+            ImageReference imgRef = new ImageReference()
+                .withPublisher("Canonical").withOffer("UbuntuServer")
+                .withSku("16.04-LTS").withVersion("latest");
+            VirtualMachineConfiguration poolConfiguration =
+                new VirtualMachineConfiguration();
+            poolConfiguration
+                .withNodeAgentSKUId("batch.node.ubuntu 16.04")
+                .withImageReference(imgRef);
+
+            PoolAddParameter poolParam = new PoolAddParameter()
+                .withId(poolId)
+                .withVmSize("STANDARD_D1_V2")
+                .withTargetDedicatedNodes(3)
+                .withVirtualMachineConfiguration(poolConfiguration);
+            client.poolOperations().createPool(poolParam);
+
+            waitForPool(client, poolId);
+            System.out.println("Pool created");
+
+            System.out.println("Creating job " + jobId);
+            client.jobOperations().createJob(jobId, poolInfo);
+
+            for (CloudJob job: client.jobOperations().listJobs()) {
+                System.out.println("job " + job.url());
+            }
+            List<TaskAddParameter> taskList = new ArrayList<TaskAddParameter>();
+
+            for (int i = 0; i < NUM_TASKS; i++) {
+                TaskAddParameter param = new TaskAddParameter()
+                    .withId(jobId + "-" + i)
+                    .withCommandLine("sleep 30");
+                taskList.add(param);
             }
 
-            azure.batchAccounts().deleteById(batchAccount.id());
+            System.out.println("Creating " + taskList.size() + " tasks");
+            client.taskOperations().createTasks(jobId, taskList);
 
-            System.out.println("Deleted batch account");
+            System.out.println("Created tasks");
+            for (int i = 0; i < 300; i++) {
+                Thread.sleep(10 * 1000);
+                PagedList<CloudTask> tasks = client.taskOperations().listTasks(jobId, new DetailLevel.Builder().withSelectClause("state").build());
+                System.out.println("Tasks remaining:" + tasks.size() + " hasNexPage:" + tasks.hasNextPage());
+                System.out.println("  NextPageLink: " + tasks.currentPage().nextPageLink());
 
-            if (batchAccount2 != null) {
-                System.out.println("Deleting second batch account - " + batchAccount2.name());
-                azure.batchAccounts().deleteById(batchAccount2.id());
-                System.out.println("Deleted second batch account");
+                TasksImpl impl = (TasksImpl) client.protocolLayer().tasks();
+                ServiceResponseWithHeaders<Page<CloudTask>, TaskListHeaders> response =
+                    impl.listSinglePageAsync(jobId).toBlocking().single();
+
+                HashMap<TaskState, Integer> map = new LinkedHashMap<>();
+                for (CloudTask task: tasks) {
+                    TaskState state =  task.state();
+                    Integer count =  map.get(state);
+                    if (count == null) {
+                        count = 0;
+                    }
+                    map.put(state, count+1);
+                }
+                for (TaskState state: map.keySet()) {
+                    System.out.println("  " + state.name() + ": " + map.get(state));
+                }
             }
 
             return true;
@@ -254,6 +254,7 @@ public final class ManageBatchAccount {
             System.out.println("Selected subscription: " + azure.subscriptionId());
 
             runSample(azure);
+
         } catch (Exception e) {
             System.out.println(e.getMessage());
             e.printStackTrace();
@@ -261,5 +262,40 @@ public final class ManageBatchAccount {
     }
 
     private ManageBatchAccount() {
+    }
+
+    private static BatchClient getBatchClient(BatchAccount batchAccount) {
+        BatchSharedKeyCredentials creds = new BatchSharedKeyCredentials(
+            "https://" + batchAccount.accountEndpoint(),
+            batchAccount.name(),
+            batchAccount.getKeys().primary()
+        );
+        return BatchClient.open(creds);
+    }
+
+    private static void waitForPool(BatchClient client, String poolId) {
+        long startTime = System.currentTimeMillis();
+        long elapsedTime = 0L;
+        boolean steady = false;
+        CloudPool pool;
+
+        try {
+
+            // Wait for the VM to be allocated
+            while (elapsedTime < POOL_STEADY_TIMEOUT_IN_SECONDS * 1000) {
+                pool = client.poolOperations().getPool(poolId);
+                if (pool.allocationState() == AllocationState.STEADY) {
+                    steady = true;
+                    break;
+                }
+                System.out.println("wait 30 seconds for pool steady...");
+                Thread.sleep(30 * 1000);
+                elapsedTime = (new Date()).getTime() - startTime;
+            }
+        } catch (Exception e) {
+            System.err.println("Pool not reached steady state properly");
+            e.printStackTrace();
+        }
+        System.out.println("Pool reached steady? " + steady);
     }
 }
