@@ -3,7 +3,7 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.microsoft.azure</groupId>
-  <artifactId>batch-java-manage-batch-accounts</artifactId>
+  <artifactId>shirans-sdk-test</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   <name>ManageBatchAccount.java</name>
   <description></description>
@@ -74,7 +74,7 @@
     <dependency>
       <groupId>com.microsoft.azure</groupId>
       <artifactId>azure-batch</artifactId>
-      <version>7.0.0</version>
+      <version>8.1.1-SNAPSHOT</version>
     </dependency>
     <dependency>
         <groupId>com.googlecode.json-simple</groupId>

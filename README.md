@@ -8,40 +8,21 @@ extensions:
   services: Batch
   platforms: java
 ---
-
-# Getting Started with Batch - Manage Batch Account - in Java #
-
-
-  Azure Batch sample for managing batch accounts -
-   - Get subscription batch account quota for a particular location.
-   - List all the batch accounts, look if quota allows you to create a new batch account at specified location by counting batch accounts in that particular location.
-   - Create a batch account with new application and application package, along with new storage account.
-   - Get the keys for batch account.
-   - Regenerate keys for batch account
-   - Regenerate the keys of storage accounts, sync with batch account.
-   - Update application's display name.
-   - Create another batch account using existing storage account.
-   - List the batch account.
-   - Delete the batch account.
-       - Delete the application packages.
-       - Delete applications.
- 
-
-## Running this Sample ##
+# Running this Sample
 
 To run this sample:
 
 Set the environment variable `AZURE_AUTH_LOCATION` with the full path for an auth file. See [how to create an auth file](https://github.com/Azure/azure-libraries-for-java/blob/master/AUTH.md).
 
-    git clone https://github.com/Azure-Samples/batch-java-manage-batch-accounts.git
+```shell
+git clone https://github.com/gingi/azure-java-sdk-batch-sample.git
+cd azure-java-sdk-batch-sample
+mvn compile exec:java
+```
 
-    cd batch-java-manage-batch-accounts
+## More information
 
-    mvn clean compile exec:java
-
-## More information ##
-
-[http://azure.com/java](http://azure.com/java)
+[https://azure.com/java](https://azure.com/java)
 
 If you don't have a Microsoft Azure subscription you can get a FREE trial account [here](http://go.microsoft.com/fwlink/?LinkId=330212)
 

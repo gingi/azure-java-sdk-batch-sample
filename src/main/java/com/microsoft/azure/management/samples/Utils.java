@@ -1689,7 +1689,7 @@ public final class Utils {
                 .append("\n\tMinimum DTUs a database is guaranteed in elastic pool: ").append(elasticPool.databaseDtuMin())
                 .append("\n\tCreation date for the elastic pool: ").append(elasticPool.creationDate())
                 .append("\n\tState of the elastic pool: ").append(elasticPool.state())
-                .append("\n\tStorage capacity in MBs for the elastic pool: ").append(elasticPool.storageMB());
+                .append("\n\tStorage capacity in MBs for the elastic pool: ").append(elasticPool.storageCapacityInMB());
 
         System.out.println(builder.toString());
     }
